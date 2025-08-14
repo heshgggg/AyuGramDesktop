@@ -1,0 +1,68 @@
+
+name: Build tdesktop (Docker)
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      config:
+        description: 'Build config (Debug or Release)'
+        required: false
+        default: 'Release'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Show workspace
+        run: pwd && ls -la
+
+      - name: Ensure docker available
+        uses: docker/setup-buildx-action@v3 
+            
+
+      - name: Build inside centos_env container
+        # CONFIG берется из workflow_dispatch input; на уровне shell выставляем дефолт Release
+        working-directory: ./AyuGramDesktop
+        env:
+          TDESKTOP_API_ID: '2040'
+          TDESKTOP_API_HASH: 'b18441a1ff607e10a989891a5462e627'
+          CONFIG_INPUT: ${{ github.event.inputs.config }}
+        run: |
+          CONFIG=${CONFIG_INPUT:-Release}
+          echo "Using CONFIG=$CONFIG"
+          python3 -m venv venv && \
+          source venv/bin/activate && \
+          pip install poetry && \
+          ./Telegram/build/prepare/linux.sh && \
+          docker run --rm -it \
+            -u $(id -u) \
+            -v "$PWD:/usr/src/tdesktop" \
+            -e CONFIG="$CONFIG" \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
+            -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
+
+      - name: List build output
+        working-directory: ./AyuGramDesktop
+        run: |
+          echo "Contents of tdesktop/out:"
+          ls -la out || true
+
+      - name: Upload build artifact (out/)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdesktop-out
+          path: tdesktop/out
