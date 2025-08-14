@@ -33,8 +33,7 @@ jobs:
             
 
       - name: Build inside centos_env container
-        # CONFIG берется из workflow_dispatch input; на уровне shell выставляем дефолт Release
-        working-directory: ./AyuGramDesktop
+        #working-directory: ./AyuGramDesktop
         env:
           TDESKTOP_API_ID: '2040'
           TDESKTOP_API_HASH: 'b18441a1ff607e10a989891a5462e627'
