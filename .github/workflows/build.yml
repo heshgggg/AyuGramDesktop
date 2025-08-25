@@ -4,11 +4,6 @@ on:
   push:
     branches: [ "dev" ]
   workflow_dispatch:
-    inputs:
-      config:
-        description: 'Build config (Debug or Release)'
-        required: false
-        default: 'Release'
 
 permissions:
   contents: write
@@ -33,14 +28,11 @@ jobs:
             
 
       - name: Build inside centos_env container
-        #working-directory: ./AyuGramDesktop
         env:
           TDESKTOP_API_ID: '2040'
           TDESKTOP_API_HASH: 'b18441a1ff607e10a989891a5462e627'
-          CONFIG_INPUT: ${{ github.event.inputs.config }}
         run: |
-          CONFIG=${CONFIG_INPUT:-Release}
-          echo "Using CONFIG=$CONFIG"
+          pwd && ls -la && \
           python3 -m venv venv && \
           source venv/bin/activate && \
           pip install poetry && \
