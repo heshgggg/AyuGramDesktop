@@ -14,11 +14,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout repository (with submodules)
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-          persist-credentials: true
+        run: git clone --recursive https://github.com/AyuGram/AyuGramDesktop.git
 
       - name: Show workspace
         run: pwd && ls -la
@@ -32,6 +28,7 @@ jobs:
           TDESKTOP_API_ID: '2040'
           TDESKTOP_API_HASH: 'b18441a1ff607e10a989891a5462e627'
         run: |
+          cd AyuGramDesktop && \
           pwd && ls -la && \
           python3 -m venv venv && \
           source venv/bin/activate && \
