@@ -152,12 +152,12 @@ jobs:
       - name: Move artifact.
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
+          mkdir out/artifact
           cd out/Release
-          mkdir artifact
-          mv * artifact/
+          mv * ../artifact/
       - uses: actions/upload-artifact@v4
         if: env.UPLOAD_ARTIFACT == 'true'
         name: Upload artifact.
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: out/Release/artifact/
+          path: out/artifact/
