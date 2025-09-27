@@ -101,7 +101,7 @@ jobs:
           source-directory: "."
           destination-github-username: ${{ github.repository_owner }}
           destination-repository-name: ${{ github.event.repository.name }}
-          target-branch: ${{ steps.prepare.outputs.update_branch }}
+          target-branch: dev
           commit-message: "chore(sync): create ${ { steps.prepare.outputs.update_branch } } from upstream"
 
       - name: No updates
