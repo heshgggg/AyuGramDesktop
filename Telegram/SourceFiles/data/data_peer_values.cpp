@@ -186,30 +186,31 @@ inline auto DefaultRestrictionValue(
 			| Flag::HasLink
 			| Flag::Forbidden
 			| Flag::Creator;
-		const auto channel = topic->channel();
-		return rpl::combine(
-			PeerFlagsValue(channel.get(), mask),
-			RestrictionsValue(channel, rights),
-			DefaultRestrictionsValue(channel, rights),
-			AdminRightsValue(channel, ChatAdminRight::ManageTopics),
-			topic->session().changes().topicFlagsValue(
-				topic,
-				TopicUpdate::Flag::Closed),
-			[=](
-					ChannelDataFlags flags,
-					ChatRestrictions sendRestriction,
-					ChatRestrictions defaultSendRestriction,
-					auto,
-					auto) {
-				const auto notAmInFlags = Flag::Left | Flag::Forbidden;
-				const auto allowed = !(flags & notAmInFlags)
-					|| ((flags & Flag::HasLink)
-						&& !(flags & Flag::JoinToWrite));
-				return allowed
-					&& ((flags & Flag::Creator)
-						|| (!sendRestriction && !defaultSendRestriction))
-					&& (!topic->closed() || topic->canToggleClosed());
-			});
+		if (const auto channel = topic->channel()) {
+			return rpl::combine(
+				PeerFlagsValue(channel, mask),
+				RestrictionsValue(channel, rights),
+				DefaultRestrictionsValue(channel, rights),
+				AdminRightsValue(channel, ChatAdminRight::ManageTopics),
+				topic->session().changes().topicFlagsValue(
+					topic,
+					TopicUpdate::Flag::Closed),
+				[=](
+						ChannelDataFlags flags,
+						ChatRestrictions sendRestriction,
+						ChatRestrictions defaultSendRestriction,
+						auto,
+						auto) {
+					const auto notAmInFlags = Flag::Left | Flag::Forbidden;
+					const auto allowed = !(flags & notAmInFlags)
+						|| ((flags & Flag::HasLink)
+							&& !(flags & Flag::JoinToWrite));
+					return allowed
+						&& ((flags & Flag::Creator)
+							|| (!sendRestriction && !defaultSendRestriction))
+						&& (!topic->closed() || topic->canToggleClosed());
+				});
+		}
 	}
 	return CanSendAnyOfValue(thread->peer(), rights, forbidInForums);
 }
@@ -490,19 +491,20 @@ QString OnlineTextFull(not_null<UserData*> user, TimeId now) {
 	} else if (const auto common = OnlineTextCommon(user->lastseen(), now)) {
 		return *common;
 	}
+	const auto &settings = AyuSettings::getInstance();
 	const auto till = user->lastseen().onlineTill();
 	const auto onlineFull = base::unixtime::parse(till);
 	const auto nowFull = base::unixtime::parse(now);
 	const auto locale = QLocale();
 	if (onlineFull.date() == nowFull.date()) {
-		const auto onlineTime = locale.toString(onlineFull.time(), QLocale::ShortFormat);
+		const auto onlineTime = locale.toString(onlineFull.time(), settings.showMessageSeconds ? QLocale::LongFormat : QLocale::ShortFormat);
 		return tr::lng_status_lastseen_today(tr::now, lt_time, onlineTime);
 	} else if (onlineFull.date().addDays(1) == nowFull.date()) {
-		const auto onlineTime = locale.toString(onlineFull.time(), QLocale::ShortFormat);
+		const auto onlineTime = locale.toString(onlineFull.time(), settings.showMessageSeconds ? QLocale::LongFormat : QLocale::ShortFormat);
 		return tr::lng_status_lastseen_yesterday(tr::now, lt_time, onlineTime);
 	}
 	const auto date = locale.toString(onlineFull.date(), QLocale::ShortFormat);
-	const auto time = locale.toString(onlineFull.time(), QLocale::ShortFormat);
+	const auto time = locale.toString(onlineFull.time(), settings.showMessageSeconds ? QLocale::LongFormat : QLocale::ShortFormat);
 	return tr::lng_status_lastseen_date_time(tr::now, lt_date, date, lt_time, time);
 }
 
@@ -525,6 +527,23 @@ bool ChannelHasActiveCall(not_null<ChannelData*> channel) {
 
 bool ChannelHasSubscriptionUntilDate(ChannelData *channel) {
 	return channel && channel->subscriptionUntilDate() > 0;
+}
+
+rpl::producer<Data::StarsRating> StarsRatingValue(
+		not_null<PeerData*> peer) {
+	if (const auto user = peer->asUser()) {
+		return user->session().changes().peerFlagsValue(
+			user,
+			Data::PeerUpdate::Flag::StarsRating
+		) | rpl::map([=] {
+			auto result = user->starsRating();
+			if (!user->isSelf() && result.level < 0) {
+				result.stars = 0;
+			}
+			return result;
+		});
+	}
+	return rpl::single(Data::StarsRating());
 }
 
 rpl::producer<QImage> PeerUserpicImageValue(

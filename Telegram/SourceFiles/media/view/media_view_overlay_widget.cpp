@@ -1111,7 +1111,7 @@ QSize OverlayWidget::flipSizeByRotation(QSize size) const {
 }
 
 bool OverlayWidget::hasCopyMediaRestriction(bool skipPremiumCheck) const {
-	if (const auto story = _stories ? _stories->story() : nullptr) {
+	if (true) {
 		// AyuGram: removed; allow downloading any stories
 		return false;
 	}
@@ -2604,8 +2604,9 @@ void OverlayWidget::saveAs() {
 					QFile(location.name()).copy(file);
 				} else {
 					QFile f(file);
-					f.open(QIODevice::WriteOnly);
-					f.write(bytes);
+					if (f.open(QIODevice::WriteOnly)) {
+						f.write(bytes);
+					}
 				}
 				if (_message) {
 					auto &manager = Core::App().downloadManager();
@@ -3390,7 +3391,7 @@ void OverlayWidget::refreshCaption() {
 			: Ui::ItemTextDefaultOptions()),
 		context);
 	if (_caption.hasSpoilers()) {
-		const auto weak = Ui::MakeWeak(widget());
+		const auto weak = base::make_weak(widget());
 		_caption.setSpoilerLinkFilter([=](const ClickContext &context) {
 			return (weak != nullptr);
 		});
@@ -4301,7 +4302,7 @@ void OverlayWidget::initThemePreview() {
 	const auto weakSession = base::make_weak(&_document->session());
 	const auto path = _document->location().name();
 	const auto id = _themePreviewId = base::RandomValue<uint64>();
-	const auto weak = Ui::MakeWeak(_widget);
+	const auto weak = base::make_weak(_widget);
 	crl::async([=, data = std::move(current)]() mutable {
 		auto preview = GeneratePreview(
 			bytes,
@@ -6463,7 +6464,7 @@ bool OverlayWidget::handleTouchEvent(not_null<QTouchEvent*> e) {
 		if (!_touchPress) {
 			break;
 		}
-		auto weak = Ui::MakeWeak(_widget);
+		auto weak = base::make_weak(_widget);
 		if (!_touchMove) {
 			const auto button = _touchRightButton
 				? Qt::RightButton

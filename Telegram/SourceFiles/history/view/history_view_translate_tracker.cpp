@@ -66,11 +66,7 @@ void TranslateTracker::setup() {
 	}) | rpl::distinct_until_changed();
 
 	using namespace rpl::mappers;
-	_trackingLanguage = rpl::combine(
-		Core::App().settings().translateChatEnabledValue(),
-		Data::AmPremiumValue(&_history->session()),
-		std::move(autoTranslationValue),
-		_1 && (_2 || _3));
+	_trackingLanguage = Core::App().settings().translateChatEnabledValue();
 	_trackingLanguage.value() | rpl::start_with_next([=](bool tracking) {
 		_trackingLifetime.destroy();
 		if (tracking) {
@@ -282,7 +278,7 @@ void TranslateTracker::requestSome() {
 	}
 	using Flag = MTPmessages_TranslateText::Flag;
 	_requestId = Ayu::Translator::TranslateManager::currentInstance()->request(
-		peer->session(),
+		&peer->session(),
 		MTP_flags(Flag::f_peer | Flag::f_id),
 		peer->input,
 		MTP_vector<MTPint>(list),

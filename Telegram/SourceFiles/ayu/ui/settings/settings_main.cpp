@@ -12,7 +12,9 @@
 #include "lang_auto.h"
 #include "settings_appearance.h"
 #include "settings_ayu.h"
+#include "settings_ayu_utils.h"
 #include "settings_chats.h"
+#include "settings_filters.h"
 #include "settings_general.h"
 #include "settings_other.h"
 
@@ -47,18 +49,17 @@ AyuMain::AyuMain(
 
 void SetupAppLogo(not_null<Ui::VerticalLayout*> container) {
 	const auto logo = container->add(
-		object_ptr<Ui::CenterWrap<Ui::RpWidget>>(
-			container,
-			object_ptr<Ui::RpWidget>(container)));
+		object_ptr<Ui::RpWidget>(container),
+		style::al_top);
 
-	const auto widget = logo->entity();
-	widget->resize(QSize(st::settingsCloudPasswordIconSize, st::settingsCloudPasswordIconSize));
+	logo->resize(QSize(st::settingsCloudPasswordIconSize, st::settingsCloudPasswordIconSize));
+	logo->setNaturalWidth(st::settingsCloudPasswordIconSize);
 
-	widget->paintRequest(
+	logo->paintRequest(
 	) | rpl::start_with_next([=](QRect clip)
 							 {
-								 auto p = QPainter(widget);
-								 const auto image = AyuAssets::currentAppLogoNoMargin(); // todo: svg renderer
+								 auto p = QPainter(logo);
+								 const auto image = AyuAssets::currentAppLogoPad();
 								 if (!image.isNull()) {
 									 const auto size = st::settingsCloudPasswordIconSize;
 									 const auto scaled = image.scaled(
@@ -71,7 +72,7 @@ void SetupAppLogo(not_null<Ui::VerticalLayout*> container) {
 										 scaled);
 								 }
 							 },
-							 widget->lifetime());
+							 logo->lifetime());
 }
 
 void SetupCategories(
@@ -87,7 +88,7 @@ void SetupCategories(
 
 	const auto categories = std::vector<CategoryInfo>{
 		{QString("AyuGram"), &st::menuIconGroupReactions, [=] { showOther(AyuGhost::Id()); }},
-		// {QString("Filters"), &st::menuIconTagFilter, [=] { showOther(AyuFilters::Id()); }},
+		{asBeta(tr::ayu_CategoryFilters(tr::now)), &st::menuIconTagFilter, [=] { showOther(AyuFilters::Id()); }},
 		{tr::ayu_CategoryGeneral(tr::now), &st::menuIconShowAll, [=] { showOther(AyuGeneral::Id()); }},
 		{tr::ayu_CategoryAppearance(tr::now), &st::menuIconPalette, [=] { showOther(AyuAppearance::Id()); }},
 		{tr::ayu_CategoryChats(tr::now), &st::menuIconChatBubble, [=] { showOther(AyuChats::Id()); }},
@@ -182,22 +183,20 @@ void AyuMain::setupContent(not_null<Window::SessionController*> controller) {
 	AddSkip(content);
 
 	content->add(
-		object_ptr<Ui::CenterWrap<Ui::FlatLabel>>(
+		object_ptr<Ui::FlatLabel>(
 			content,
-			object_ptr<Ui::FlatLabel>(
-				content,
-				rpl::single(QString("AyuGram Desktop v") + QString::fromLatin1(AppVersionStr)),
-				st::boxTitle)));
+			rpl::single(QString("AyuGram Desktop v") + QString::fromLatin1(AppVersionStr)),
+			st::boxTitle),
+		style::al_top);
 
 	AddSkip(content);
 
 	content->add(
-		object_ptr<Ui::CenterWrap<Ui::FlatLabel>>(
+		object_ptr<Ui::FlatLabel>(
 			content,
-			object_ptr<Ui::FlatLabel>(
-				content,
-				tr::ayu_SettingsDescription(),
-				st::centeredBoxLabel)));
+			tr::ayu_SettingsDescription(),
+			st::centeredBoxLabel),
+		style::al_top);
 
 	AddSkip(content);
 	AddSkip(content);

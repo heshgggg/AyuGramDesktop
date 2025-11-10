@@ -61,10 +61,7 @@ namespace {
 
 [[nodiscard]] QPoint notificationStartPosition() {
 	const auto corner = Core::App().settings().notificationsCorner();
-	const auto window = Core::App().activePrimaryWindow();
-	const auto r = window
-		? window->widget()->desktopRect()
-		: QGuiApplication::primaryScreen()->availableGeometry();
+	const auto r = NotificationDisplayRect(Core::App().activePrimaryWindow());
 	const auto isLeft = Core::Settings::IsLeftCorner(corner);
 	const auto isTop = Core::Settings::IsTopCorner(corner);
 	auto x = (isLeft == rtl())
@@ -246,11 +243,6 @@ void Manager::showNextFromQueue() {
 	do {
 		auto queued = _queuedNotifications.front();
 		_queuedNotifications.pop_front();
-
-		if (queued.item && isMessageHidden(queued.item)) {
-			--count;
-			continue;
-		}
 
 		subscribeToSession(&queued.history->session());
 		_notifications.push_back(std::make_unique<Notification>(
@@ -641,7 +633,7 @@ QPoint Widget::computePosition(int height) const {
 	return QPoint(_startPosition.x(), _startPosition.y() + realShift);
 }
 
-Background::Background(QWidget *parent) : TWidget(parent) {
+Background::Background(QWidget *parent) : RpWidget(parent) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
 }
 

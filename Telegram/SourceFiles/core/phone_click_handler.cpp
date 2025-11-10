@@ -127,19 +127,19 @@ ResolvePhoneAction::ResolvePhoneAction(
 					return;
 				}
 
-				const auto weak = Ui::MakeWeak(this);
+				const auto weak = base::make_weak(this);
 				const auto session = &controller->session();
 
-				searchById(
+				searchUserById(
 					possibleId,
 					session,
-					[session, weak, possibleId](const QString &username, UserData *user)
+					[weak](const QString &username, PeerData *user)
 					{
 						if (!weak) {
 							return;
 						}
 
-						const auto strong = weak.data();
+						const auto strong = weak.get();
 						if (!strong) {
 							return;
 						}
@@ -371,7 +371,7 @@ void PhoneClickHandler::onClick(ClickContext context) const {
 	if (Trim(phone) != Trim(controller->session().user()->phone())) {
 		menu->addAction(
 			tr::lng_info_add_as_contact(tr::now),
-			[=, raw = Ui::MakeWeak(resolvePhoneAction.get())] {
+			[=, raw = base::make_weak(resolvePhoneAction.get())] {
 				controller->show(
 					Box<AddContactBox>(
 						&controller->session(),

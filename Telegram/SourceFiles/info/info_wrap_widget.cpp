@@ -53,6 +53,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "styles/style_layers.h"
 
+// AyuGram includes
+#include "ayu/ayu_settings.h"
+#include "ayu/features/filters/shadow_ban_utils.h"
+#include "ayu/ui/settings/filters/edit_filter.h"
+#include "ayu/ui/settings/filters/settings_filters_list.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "inline_bots/bot_attach_web_view.h"
+#include "styles/style_ayu_settings.h"
+#include "window/window_peer_menu.h"
 
 namespace Info {
 namespace {
@@ -287,11 +296,19 @@ Dialogs::RowDescriptor WrapWidget::activeChat() const {
 			peer->owner().history(peer),
 			FullMsgId());
 	} else if (const auto storiesPeer = key().storiesPeer()) {
-		return (key().storiesTab() == Stories::Tab::Saved)
-			? Dialogs::RowDescriptor(
+		return (key().storiesAlbumId() == Stories::ArchiveId())
+			? Dialogs::RowDescriptor()
+			: Dialogs::RowDescriptor(
 				storiesPeer->owner().history(storiesPeer),
-				FullMsgId())
-			: Dialogs::RowDescriptor();
+				FullMsgId());
+	} else if (const auto giftsPeer = key().giftsPeer()) {
+		return Dialogs::RowDescriptor(
+			giftsPeer->owner().history(giftsPeer),
+			FullMsgId());
+	} else if (const auto musicPeer = key().musicPeer()) {
+		return Dialogs::RowDescriptor(
+			musicPeer->owner().history(musicPeer),
+			FullMsgId());
 	} else if (key().settingsSelf()
 			|| key().isDownloads()
 			|| key().reactionsContextId()
@@ -313,7 +330,9 @@ void WrapWidget::forceContentRepaint() {
 }
 
 void WrapWidget::setupTop() {
-	if (HasCustomTopBar(_controller.get()) || wrap() == Wrap::Search) {
+	if (HasCustomTopBar(_controller.get())
+		|| wrap() == Wrap::Search
+		|| wrap() == Wrap::StoryAlbumEdit) {
 		_topBar.destroy();
 		return;
 	}
@@ -410,10 +429,57 @@ void WrapWidget::setupTopBarMenuToggle() {
 						Box(Ui::FillPeerQrBox, self, std::nullopt, nullptr));
 				});
 			}
+		} else if (section.settingsType() == ::Settings::AyuFiltersList::Id()) {
+			const auto controller = _controller->parentController();
+			const auto &st = st::filtersAddIcon;
+			const auto button = _topBar->addButton(base::make_unique_q<Ui::IconButton>(_topBar, st));
+
+			const auto show = controller->uiShow();
+			if (controller->shadowBan) {
+				auto types = InlineBots::PeerTypes();
+				types |= InlineBots::PeerType::Bot;
+				types |= InlineBots::PeerType::User;
+
+				button->addClickHandler([=]
+				{
+					Window::ShowChooseRecipientBox(
+						controller,
+						[=](not_null<Data::Thread*> thread)
+						{
+							const auto peer = thread->peer();
+							const auto realId = getDialogIdFromPeer(peer);
+
+							ShadowBanUtils::addShadowBan(realId);
+							return true;
+						},
+						tr::ayu_FiltersMenuSelectChat(),
+						nullptr,
+						types
+					);
+				});
+			} else {
+				button->addClickHandler([=]
+				{
+					show->show(::Settings::RegexEditBox(nullptr, nullptr, controller->dialogId));
+				});
+			}
+
+
+			if (controller->showExclude.has_value() && controller->showExclude.value()) {
+				auto icon = base::make_unique_q<Ui::IconButton>(_topBar, st::filtersExcludeIcon);
+
+				const auto excludeButton = _topBar->addButton(std::move(icon));
+				excludeButton->addClickHandler([=, content = _content.data()]
+				{
+					// open new
+					controller->showExclude = false;
+					controller->showSettings(::Settings::AyuFiltersList::Id());
+				});
+			}
 		}
 	} else if (key.storiesPeer()
 		&& key.storiesPeer()->isSelf()
-		&& key.storiesTab() == Stories::Tab::Saved) {
+		&& key.storiesAlbumId() != Stories::ArchiveId()) {
 		const auto &st = (wrap() == Wrap::Layer)
 			? st::infoLayerTopBarEdit
 			: st::infoTopBarEdit;
@@ -445,7 +511,7 @@ void WrapWidget::setupTopBarMenuToggle() {
 				addTopBarMenuButton();
 			}
 		}, _topBar->lifetime());
-	} else if (section.type() == Section::Type::PeerGifts && key.peer()) {
+	} else if (key.giftsPeer()) {
 		addTopBarMenuButton();
 	}
 }
@@ -656,8 +722,6 @@ void WrapWidget::finishShowContent() {
 			.subtitle = _content->subtitle(),
 		});
 		_topBar->setStories(_content->titleStories());
-		_topBar->setStoriesArchive(
-			_controller->key().storiesTab() == Stories::Tab::Archive);
 	}
 	_desiredHeights.fire(desiredHeightForContent());
 	_desiredShadowVisibilities.fire(_content->desiredShadowVisibility());
@@ -680,6 +744,21 @@ void WrapWidget::finishShowContent() {
 	) | rpl::start_with_next([=] {
 		updateContentGeometry();
 	}, _content->lifetime());
+
+	AyuSettings::get_filtersUpdate() | rpl::start_with_next([=]
+	{
+		auto contentMemento = _content->createMemento();
+		if (!contentMemento) {
+			return;
+		}
+
+		std::vector<std::shared_ptr<ContentMemento>> stack;
+		stack.push_back(std::move(contentMemento));
+		const auto sectionMemento = std::make_shared<Memento>(std::move(stack));
+
+		showBackFromStackInternal(Window::SectionShow(anim::type::instant));
+		showInternal(sectionMemento.get(), Window::SectionShow(anim::type::instant));
+	}, _content->lifetime());
 }
 
 rpl::producer<bool> WrapWidget::topShadowToggledValue() const {
@@ -697,7 +776,13 @@ rpl::producer<int> WrapWidget::desiredHeightForContent() const {
 }
 
 rpl::producer<SelectedItems> WrapWidget::selectedListValue() const {
-	return _selectedLists.events() | rpl::flatten_latest();
+	auto current = _content
+		? _content->selectedListValue()
+		: nullptr;
+	return _selectedLists.events_starting_with(current
+		? std::move(current)
+		: rpl::single(SelectedItems(Storage::SharedMediaType::Photo))
+	) | rpl::flatten_latest();
 }
 
 object_ptr<ContentWidget> WrapWidget::createContent(
@@ -780,7 +865,6 @@ bool WrapWidget::showInternal(
 			&& (params.way == Window::SectionShow::Way::ClearStack);
 		if (_controller->validateMementoPeer(content)) {
 			if (!skipInternal && _content->showInternal(content)) {
-				highlightTopBar();
 				return true;
 			}
 		}
@@ -825,7 +909,7 @@ rpl::producer<int> WrapWidget::desiredHeightValue() const {
 
 QRect WrapWidget::contentGeometry() const {
 	const auto top = _topBar ? _topBar->height() : 0;
-	return rect().marginsRemoved({ 0, top, 0, 0 });
+	return rect().marginsRemoved({ 0, std::min(top, height()), 0, 0});
 }
 
 bool WrapWidget::returnToFirstStackFrame(
@@ -980,7 +1064,7 @@ object_ptr<Ui::RpWidget> WrapWidget::createTopBarSurrogate(
 		Assert(_topBar != nullptr);
 
 		auto result = object_ptr<Ui::AbstractButton>(parent);
-		result->addClickHandler([weak = Ui::MakeWeak(this)]{
+		result->addClickHandler([weak = base::make_weak(this)]{
 			if (weak) {
 				weak->_controller->showBackFromStack();
 			}

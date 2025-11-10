@@ -20,6 +20,10 @@ add_subdirectory(lib_webrtc)
 add_subdirectory(lib_webview)
 add_subdirectory(codegen)
 
+# AyuGram filters
+add_subdirectory(lib_icu)
+# AyuGram filters
+
 get_filename_component(src_loc SourceFiles REALPATH)
 get_filename_component(res_loc Resources REALPATH)
 
@@ -35,7 +39,7 @@ include(cmake/td_mtproto.cmake)
 include(cmake/td_scheme.cmake)
 include(cmake/td_tde2e.cmake)
 include(cmake/td_ui.cmake)
-include(cmake/generate_appdata_changelog.cmake)
+include(cmake/generate_appstream_changelog.cmake)
 
 if (DESKTOP_APP_TEST_APPS)
     include(cmake/tests.cmake)
@@ -92,6 +96,9 @@ PRIVATE
     desktop-app::external_openssl
     desktop-app::external_openal
     desktop-app::external_xxhash
+
+    # AyuGram filters
+    ayugram::lib_icu
 )
 
 set(ayugram_files
@@ -107,7 +114,6 @@ set(ayugram_files
         ayu/ayu_lang.h
         ayu/ayu_infra.cpp
         ayu/ayu_infra.h
-        ayu/ayu_constants.h
         ayu/utils/ayu_mapper.cpp
         ayu/utils/ayu_mapper.h
         ayu/utils/qt_key_modifiers_extended.h
@@ -127,6 +133,14 @@ set(ayugram_files
         ayu/ui/ayu_logo.h
         ayu/ui/utils/ayu_profile_values.cpp
         ayu/ui/utils/ayu_profile_values.h
+        ayu/ui/utils/color_cut_quantizer.cpp
+        ayu/ui/utils/color_cut_quantizer.h
+        ayu/ui/utils/color_utils.cpp
+        ayu/ui/utils/color_utils.h
+        ayu/ui/utils/palette.cpp
+        ayu/ui/utils/palette.h
+        ayu/ui/utils/itunes_search.cpp
+        ayu/ui/utils/itunes_search.h
         ayu/ui/settings/settings_appearance.cpp
         ayu/ui/settings/settings_appearance.h
         ayu/ui/settings/settings_ayu_utils.cpp
@@ -137,10 +151,18 @@ set(ayugram_files
         ayu/ui/settings/settings_general.h
         ayu/ui/settings/settings_ayu.cpp
         ayu/ui/settings/settings_ayu.h
+        ayu/ui/settings/settings_filters.cpp
+        ayu/ui/settings/settings_filters.h
         ayu/ui/settings/settings_main.cpp
         ayu/ui/settings/settings_main.h
         ayu/ui/settings/settings_other.cpp
         ayu/ui/settings/settings_other.h
+        ayu/ui/settings/filters/settings_filters_list.cpp
+        ayu/ui/settings/filters/settings_filters_list.h
+        ayu/ui/settings/filters/per_dialog_filter.cpp
+        ayu/ui/settings/filters/per_dialog_filter.h
+        ayu/ui/settings/filters/edit_filter.cpp
+        ayu/ui/settings/filters/edit_filter.h
         ayu/ui/context_menu/context_menu.cpp
         ayu/ui/context_menu/context_menu.h
         ayu/ui/context_menu/menu_item_subtext.cpp
@@ -155,6 +177,8 @@ set(ayugram_files
         ayu/ui/boxes/edit_mark_box.h
         ayu/ui/boxes/font_selector.cpp
         ayu/ui/boxes/font_selector.h
+        ayu/ui/boxes/import_filters_box.cpp
+        ayu/ui/boxes/import_filters_box.h
         ayu/ui/boxes/theme_selector_box.cpp
         ayu/ui/boxes/theme_selector_box.h
         ayu/ui/boxes/message_shot_box.cpp
@@ -167,6 +191,8 @@ set(ayugram_files
         ayu/ui/components/image_view.h
         ayu/ui/components/icon_picker.cpp
         ayu/ui/components/icon_picker.h
+        ayu/ui/components/saved_music.cpp
+        ayu/ui/components/saved_music.h
         ayu/libs/json.hpp
         ayu/libs/json_ext.hpp
         ayu/libs/sqlite/sqlite3.c
@@ -198,11 +224,22 @@ set(ayugram_files
         ayu/features/translator/implementations/telegram.h
         ayu/features/translator/implementations/base.cpp
         ayu/features/translator/implementations/base.h
+        ayu/features/filters/filters_controller.cpp
+        ayu/features/filters/filters_controller.h
+        ayu/features/filters/filters_cache_controller.cpp
+        ayu/features/filters/filters_cache_controller.h
+        ayu/features/filters/filters_utils.cpp
+        ayu/features/filters/filters_utils.h
+        ayu/features/filters/shadow_ban_utils.cpp
+        ayu/features/filters/shadow_ban_utils.h
         ayu/data/messages_storage.cpp
         ayu/data/messages_storage.h
         ayu/data/entities.h
         ayu/data/ayu_database.cpp
         ayu/data/ayu_database.h
+
+        info/profile/info_profile_music_button.cpp
+        info/profile/info_profile_music_button.h
 )
 
 target_precompile_headers(Telegram PRIVATE $<$<COMPILE_LANGUAGE:CXX,OBJCXX>:${src_loc}/stdafx.h>)
@@ -475,6 +512,14 @@ PRIVATE
     calls/group/calls_group_members_row.h
     calls/group/calls_group_menu.cpp
     calls/group/calls_group_menu.h
+    calls/group/calls_group_message_encryption.cpp
+    calls/group/calls_group_message_encryption.h
+    calls/group/calls_group_message_field.cpp
+    calls/group/calls_group_message_field.h
+    calls/group/calls_group_messages.cpp
+    calls/group/calls_group_messages.h
+    calls/group/calls_group_messages_ui.cpp
+    calls/group/calls_group_messages_ui.h
     calls/group/calls_group_panel.cpp
     calls/group/calls_group_panel.h
     calls/group/calls_group_rtmp.cpp
@@ -635,6 +680,8 @@ PRIVATE
     data/notify/data_notify_settings.h
     data/notify/data_peer_notify_settings.cpp
     data/notify/data_peer_notify_settings.h
+    data/notify/data_peer_notify_volume.cpp
+    data/notify/data_peer_notify_volume.h
     data/stickers/data_custom_emoji.cpp
     data/stickers/data_custom_emoji.h
     data/stickers/data_stickers_set.cpp
@@ -724,6 +771,7 @@ PRIVATE
     data/data_peer_bot_command.h
     data/data_peer_bot_commands.cpp
     data/data_peer_bot_commands.h
+    data/data_peer_common.h
     data/data_peer_id.cpp
     data/data_peer_id.h
     data/data_peer_values.cpp
@@ -745,6 +793,8 @@ PRIVATE
     data/data_report.h
     data/data_saved_messages.cpp
     data/data_saved_messages.h
+    data/data_saved_music.cpp
+    data/data_saved_music.h
     data/data_saved_sublist.cpp
     data/data_saved_sublist.h
     data/data_search_controller.cpp
@@ -757,6 +807,7 @@ PRIVATE
     data/data_shared_media.h
     data/data_sparse_ids.cpp
     data/data_sparse_ids.h
+    data/data_star_gift.cpp
     data/data_star_gift.h
     data/data_statistics.h
     data/data_stories.cpp
@@ -819,6 +870,8 @@ PRIVATE
     dialogs/dialogs_search_from_controllers.h
     dialogs/dialogs_search_tags.cpp
     dialogs/dialogs_search_tags.h
+    dialogs/dialogs_search_posts.cpp
+    dialogs/dialogs_search_posts.h
     dialogs/dialogs_top_bar_suggestion.cpp
     dialogs/dialogs_top_bar_suggestion.h
     dialogs/dialogs_widget.cpp
@@ -879,6 +932,8 @@ PRIVATE
     history/view/controls/history_view_voice_record_bar.h
     history/view/controls/history_view_webpage_processor.cpp
     history/view/controls/history_view_webpage_processor.h
+    history/view/media/history_view_birthday_suggestion.cpp
+    history/view/media/history_view_birthday_suggestion.h
     history/view/media/history_view_call.cpp
     history/view/media/history_view_call.h
     history/view/media/history_view_contact.cpp
@@ -921,6 +976,8 @@ PRIVATE
     history/view/media/history_view_poll.h
     history/view/media/history_view_premium_gift.cpp
     history/view/media/history_view_premium_gift.h
+    history/view/media/history_view_save_document_action.cpp
+    history/view/media/history_view_save_document_action.h
     history/view/media/history_view_service_box.cpp
     history/view/media/history_view_service_box.h
     history/view/media/history_view_similar_channels.cpp
@@ -984,6 +1041,8 @@ PRIVATE
     history/view/history_view_fake_items.h
     history/view/history_view_group_call_bar.cpp
     history/view/history_view_group_call_bar.h
+    history/view/history_view_group_members_widget.cpp
+    history/view/history_view_group_members_widget.h
     history/view/history_view_item_preview.h
     history/view/history_view_list_widget.cpp
     history/view/history_view_list_widget.h
@@ -1008,6 +1067,8 @@ PRIVATE
     history/view/history_view_schedule_box.h
     history/view/history_view_scheduled_section.cpp
     history/view/history_view_scheduled_section.h
+    history/view/history_view_self_forwards_tagger.cpp
+    history/view/history_view_self_forwards_tagger.h
     history/view/history_view_send_action.cpp
     history/view/history_view_send_action.h
     history/view/history_view_service_message.cpp
@@ -1052,6 +1113,8 @@ PRIVATE
     history/history_inner_widget.h
     history/history_location_manager.cpp
     history/history_location_manager.h
+    history/history_streamed_drafts.cpp
+    history/history_streamed_drafts.h
     history/history_translation.cpp
     history/history_translation.h
     history/history_unread_things.cpp
@@ -1118,6 +1181,8 @@ PRIVATE
     info/media/info_media_widget.h
     info/members/info_members_widget.cpp
     info/members/info_members_widget.h
+    info/peer_gifts/info_peer_gifts_collections.cpp
+    info/peer_gifts/info_peer_gifts_collections.h
     info/peer_gifts/info_peer_gifts_common.cpp
     info/peer_gifts/info_peer_gifts_common.h
     info/peer_gifts/info_peer_gifts_widget.cpp
@@ -1142,8 +1207,6 @@ PRIVATE
     info/profile/info_profile_members_controllers.h
     info/profile/info_profile_phone_menu.cpp
     info/profile/info_profile_phone_menu.h
-    info/profile/info_profile_text.cpp
-    info/profile/info_profile_text.h
     info/profile/info_profile_values.cpp
     info/profile/info_profile_values.h
     info/profile/info_profile_widget.cpp
@@ -1152,6 +1215,11 @@ PRIVATE
     info/reactions_list/info_reactions_list_widget.h
     info/requests_list/info_requests_list_widget.cpp
     info/requests_list/info_requests_list_widget.h
+    info/saved/info_saved_music_common.h
+    info/saved/info_saved_music_provider.cpp
+    info/saved/info_saved_music_provider.h
+    info/saved/info_saved_music_widget.cpp
+    info/saved/info_saved_music_widget.h
     info/saved/info_saved_sublists_widget.cpp
     info/saved/info_saved_sublists_widget.h
     info/settings/info_settings_widget.cpp
@@ -1168,6 +1236,9 @@ PRIVATE
     info/statistics/info_statistics_tag.h
     info/statistics/info_statistics_widget.cpp
     info/statistics/info_statistics_widget.h
+    info/stories/info_stories_albums.cpp
+    info/stories/info_stories_albums.h
+    info/stories/info_stories_common.h
     info/stories/info_stories_inner_widget.cpp
     info/stories/info_stories_inner_widget.h
     info/stories/info_stories_provider.cpp
@@ -1222,6 +1293,8 @@ PRIVATE
     inline_bots/inline_results_widget.h
     intro/intro_code.cpp
     intro/intro_code.h
+    intro/intro_email.cpp
+    intro/intro_email.h
     intro/intro_password_check.cpp
     intro/intro_password_check.h
     intro/intro_phone.cpp
@@ -1375,6 +1448,8 @@ PRIVATE
     menu/menu_antispam_validator.h
     menu/menu_item_download_files.cpp
     menu/menu_item_download_files.h
+    menu/menu_item_rate_transcribe_session.cpp
+    menu/menu_item_rate_transcribe_session.h
     menu/menu_mute.cpp
     menu/menu_mute.h
     menu/menu_send.cpp
@@ -1408,6 +1483,8 @@ PRIVATE
     mtproto/special_config_request.cpp
     mtproto/special_config_request.h
     mtproto/type_utils.h
+    overview/overview_checkbox.cpp
+    overview/overview_checkbox.h
     overview/overview_layout.cpp
     overview/overview_layout.h
     overview/overview_layout_delegate.h
@@ -1528,10 +1605,6 @@ PRIVATE
     platform/platform_window_title.h
     profile/profile_back_button.cpp
     profile/profile_back_button.h
-    profile/profile_block_group_members.cpp
-    profile/profile_block_group_members.h
-    profile/profile_block_peer_list.cpp
-    profile/profile_block_peer_list.h
     profile/profile_block_widget.cpp
     profile/profile_block_widget.h
     profile/profile_cover_drop_area.cpp
@@ -1726,8 +1799,6 @@ PRIVATE
     ui/text/format_song_document_name.h
     ui/widgets/expandable_peer_list.cpp
     ui/widgets/expandable_peer_list.h
-    ui/widgets/label_with_custom_emoji.cpp
-    ui/widgets/label_with_custom_emoji.h
     ui/widgets/chat_filters_tabs_strip.cpp
     ui/widgets/chat_filters_tabs_strip.h
     ui/widgets/peer_bubble.cpp
@@ -1760,6 +1831,8 @@ PRIVATE
     window/window_adaptive.h
     window/window_chat_preview.cpp
     window/window_chat_preview.h
+    window/window_chat_switch_process.cpp
+    window/window_chat_switch_process.h
     window/window_connecting_widget.cpp
     window/window_connecting_widget.h
     window/window_controller.cpp
@@ -1883,44 +1956,60 @@ if (WIN32)
     if (QT_VERSION LESS 6)
         target_link_libraries(Telegram PRIVATE desktop-app::win_directx_helper)
     endif()
+
+    target_link_options(Telegram PRIVATE /PDBPAGESIZE:8192)
 elseif (APPLE)
     if (NOT DESKTOP_APP_USE_PACKAGED)
         target_link_libraries(Telegram PRIVATE desktop-app::external_iconv)
     endif()
 
-    set(icons_path ${CMAKE_CURRENT_SOURCE_DIR}/Telegram/Images.xcassets)
+#    find_program(ACTOOL_EXECUTABLE actool)
+#    if(NOT ACTOOL_EXECUTABLE)
+#        message(FATAL_ERROR "actool not found.")
+#    endif()
+
     if (CMAKE_GENERATOR STREQUAL Xcode)
-        target_add_resource(Telegram ${icons_path})
-    else()
-        set(icon_path ${icons_path}/Icon.iconset)
-        find_program(ICONUTIL iconutil)
-        find_program(PNG2ICNS png2icns)
-        if (ICONUTIL)
-            add_custom_command(
-                OUTPUT Icon.icns
-                COMMAND ${ICONUTIL}
-                ARGS
-                    --convert icns
-                    --output Icon.icns
-                    ${icon_path}
+        set(ayugram_icons
+            Default
+            Alt
+            Discord
+            Spotify
+            Extera
+            Nothing
+            Bard
+            Yaplus
+            Win95
+            Chibi
+            Chibi2
+            Extera2
+        )
+
+#        set(ICON_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/IconOutput")
+        foreach (icon ${ayugram_icons})
+#            add_custom_command(TARGET Telegram
+#                    PRE_LINK
+#                    COMMAND mkdir -p "${ICON_OUTPUT_DIR}"
+#                    COMMAND ${ACTOOL_EXECUTABLE}
+#                    "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon"
+#                    --compile "${ICON_OUTPUT_DIR}"
+#                    --app-icon AppIcon-${icon}
+#                    --enable-on-demand-resources NO
+#                    --development-region en
+#                    --target-device mac
+#                    --platform macosx
+#                    --minimum-deployment-target 10.13
+#                    --output-partial-info-plist /dev/null
+#                    --output-format human-readable-text
+#                    COMMENT "Compiling icon ${icon}"
+#                    COMMAND cp "${ICON_OUTPUT_DIR}/AppIcon-${icon}.icns" "$<TARGET_FILE_DIR:Telegram>/../Resources"
+#            )
+
+            # create resulting Assets.car with all icons
+            target_add_resource(Telegram "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon")
+            set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon" PROPERTIES
+                    XCODE_EXPLICIT_FILE_TYPE "folder.iconcomposer.icon"
             )
-        elseif (PNG2ICNS)
-            add_custom_command(
-                OUTPUT Icon.icns
-                COMMAND ${PNG2ICNS}
-                ARGS
-                    Icon.icns
-                    ${icon_path}/icon_16x16.png
-                    ${icon_path}/icon_32x32.png
-                    ${icon_path}/icon_128x128.png
-                    ${icon_path}/icon_256x256.png
-                    ${icon_path}/icon_512x512.png
-            )
-        endif()
-        if (ICONUTIL OR PNG2ICNS)
-            set_source_files_properties(Icon.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-            target_add_resource(Telegram Icon.icns)
-        endif()
+        endforeach()
     endif()
 
     set(lang_packs
@@ -2013,7 +2102,9 @@ set_target_properties(Telegram PROPERTIES
     XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER ${bundle_identifier}
     XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION ${desktop_app_version_string}
     XCODE_ATTRIBUTE_PRODUCT_NAME ${output_name}
-    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME AppIcon
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME AppIcon-Default
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES AppIcon-Alt AppIcon-Discord AppIcon-Spotify AppIcon-Extera AppIcon-Nothing AppIcon-Bard AppIcon-Yaplus AppIcon-Win95 AppIcon-Chibi AppIcon-Chibi2 AppIcon-Extera2
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS YES
     XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME YES
     XCODE_ATTRIBUTE_COMBINE_HIDPI_IMAGES YES
     XCODE_ATTRIBUTE_COPY_PHASE_STRIP NO
@@ -2036,6 +2127,7 @@ PRIVATE
     TDESKTOP_API_ID=${TDESKTOP_API_ID}
     TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
     G_LOG_DOMAIN="Telegram"
+    U_STATIC_IMPLEMENTATION=1 # AyuGram: do not use __declspec(dllimport) when including icu headers
 )
 
 get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -2218,7 +2310,7 @@ if (LINUX AND DESKTOP_APP_USE_PACKAGED)
     include(GNUInstallDirs)
     configure_file("../lib/xdg/com.ayugram.desktop.service" "${CMAKE_CURRENT_BINARY_DIR}/com.ayugram.desktop.service" @ONLY)
     configure_file("../lib/xdg/com.ayugram.desktop.metainfo.xml" "${CMAKE_CURRENT_BINARY_DIR}/com.ayugram.desktop.metainfo.xml" @ONLY)
-    generate_appdata_changelog(Telegram "${CMAKE_SOURCE_DIR}/changelog.txt" "${CMAKE_CURRENT_BINARY_DIR}/com.ayugram.desktop.metainfo.xml")
+    generate_appstream_changelog(Telegram "${CMAKE_SOURCE_DIR}/changelog.txt" "${CMAKE_CURRENT_BINARY_DIR}/com.ayugram.desktop.metainfo.xml")
     install(TARGETS Telegram RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" BUNDLE DESTINATION "${CMAKE_INSTALL_BINDIR}")
     install(FILES "Resources/art/icon16.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/16x16/apps" RENAME "com.ayugram.desktop.png")
     install(FILES "Resources/art/icon32.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/32x32/apps" RENAME "com.ayugram.desktop.png")

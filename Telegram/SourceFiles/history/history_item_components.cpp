@@ -55,6 +55,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "support/support_helper.h"
 #include "styles/style_boxes.h"
 #include "styles/style_chat.h"
+#include "styles/style_credits.h"
 #include "styles/style_dialogs.h" // dialogsMiniReplyStory.
 #include "styles/style_settings.h"
 #include "styles/style_widgets.h"
@@ -63,7 +64,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
-
+#include "ayu/features/filters/filters_controller.h"
 
 namespace {
 
@@ -536,16 +537,21 @@ void HistoryMessageReply::updateData(
 		&& author->isUser()
 		&& author->asUser()->isBlocked();
 
+
+	const auto filtered = resolvedMessage &&
+			!resolvedMessage.empty() &&
+			FiltersController::filtered(resolvedMessage.get());
+
 	const auto displaying = resolvedMessage
 		|| resolvedStory
 		|| ((nonEmptyQuote || _fields.externalMedia)
 			&& (!_fields.messageId || force));
-	_displaying = displaying && !blocked ? 1 : 0;
+	_displaying = displaying && !blocked && !filtered ? 1 : 0;
 
 	const auto unavailable = !resolvedMessage
 		&& !resolvedStory
 		&& ((!_fields.storyId && !_fields.messageId) || force);
-	_unavailable = unavailable && !blocked ? 1 : 0;
+	_unavailable = unavailable && !blocked && !filtered ? 1 : 0;
 
 	if (force) {
 		if (!_displaying && (_fields.messageId || _fields.storyId)) {
@@ -770,11 +776,6 @@ ReplyKeyboard::ReplyKeyboard(
 		const auto context = _item->fullId();
 		const auto rowCount = int(markup->data.rows.size());
 		_rows.reserve(rowCount);
-		const auto buttonEmoji = Ui::Text::SingleCustomEmoji(
-			owner->customEmojiManager().registerInternalEmoji(
-				st::settingsPremiumIconStar,
-				QMargins(0, -st::moderateBoxExpandInnerSkip, 0, 0),
-				true));
 		for (auto i = 0; i != rowCount; ++i) {
 			const auto &row = markup->data.rows[i];
 			const auto rowSize = int(row.size());
@@ -809,7 +810,8 @@ ReplyKeyboard::ReplyKeyboard(
 					auto firstPart = true;
 					for (const auto &part : text.split(QChar(0x2B50))) {
 						if (!firstPart) {
-							result.append(buttonEmoji);
+							result.append(Ui::Text::IconEmoji(
+								&st::starIconEmojiLarge));
 						}
 						result.append(part);
 						firstPart = false;
@@ -828,11 +830,7 @@ ReplyKeyboard::ReplyKeyboard(
 					button.text.setMarkedText(
 						_st->textStyle(),
 						TextUtilities::SingleLine(textWithEntities),
-						kMarkupTextOptions,
-						Core::TextContext({
-							.session = &item->history()->owner().session(),
-							.repaint = [=] { _st->repaint(item); },
-						}));
+						kMarkupTextOptions);
 				} else {
 					button.text.setText(
 						_st->textStyle(),
@@ -1366,11 +1364,7 @@ MessageFactcheck FromMTP(
 	}
 	const auto &data = factcheck->data();
 	if (const auto text = data.vtext()) {
-		const auto &data = text->data();
-		result.text = {
-			qs(data.vtext()),
-			Api::EntitiesFromMTP(session, data.ventities().v),
-		};
+		result.text = Api::ParseTextWithEntities(session, *text);
 	}
 	if (const auto country = data.vcountry()) {
 		result.country = qs(country->v);

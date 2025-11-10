@@ -14,7 +14,38 @@
 #include "dialogs/dialogs_main_list.h"
 #include "info/profile/info_profile_badge.h"
 
-using UsernameResolverCallback = Fn<void(const QString &, UserData *)>;
+using UsernameResolverCallback = Fn<void(const QString &, PeerData *)>;
+
+class TimedCountDownLatch
+{
+public:
+    explicit TimedCountDownLatch(int count)
+        : count_(count) {
+    }
+
+    void countDown() {
+        std::unique_lock lock(mutex_);
+        if (count_ > 0) {
+            count_--;
+        }
+        if (count_ == 0) {
+            cv_.notify_all();
+        }
+    }
+
+    bool await(std::chrono::milliseconds timeout) {
+        std::unique_lock lock(mutex_);
+        if (count_ == 0) {
+            return true;
+        }
+        return cv_.wait_for(lock, timeout, [this] { return count_ == 0; });
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    int count_;
+};
 
 Main::Session *getSession(ID userId);
 void dispatchToMainThread(const std::function<void()> &callback, int delay = 0);
@@ -28,6 +59,7 @@ bool isCustomBadgePeer(ID peerId);
 CustomBadge getCustomBadge(ID peerId);
 
 rpl::producer<Info::Profile::Badge::Content> ExteraBadgeTypeFromPeer(not_null<PeerData*> peer);
+Fn<void()> badgeClickHandler(not_null<PeerData *> peer);
 
 bool isMessageHidden(not_null<HistoryItem*> item);
 
@@ -55,10 +87,16 @@ int getScheduleTime(int64 sumSize);
 bool isMessageSavable(not_null<HistoryItem *> item);
 void processMessageDelete(not_null<HistoryItem *> item);
 
-void searchById(ID userId, Main::Session *session, bool retry, const UsernameResolverCallback &callback);
-void searchById(ID userId, Main::Session *session, const UsernameResolverCallback &callback);
+void searchUserById(ID userId, Main::Session *session, const UsernameResolverCallback &callback);
+void searchChatById(ID chatId, Main::Session *session, const UsernameResolverCallback &callback);
 
 ID getUserIdFromPackId(uint64 id);
 
 TextWithTags extractText(not_null<HistoryItem*> item);
 bool mediaDownloadable(const Data::Media* media);
+
+void resolveAllChats(const std::map<long long, QString> &peers);
+not_null<Main::Session *> currentSession();
+
+PeerData* getPeerFromDialogId(ID id);
+PeerData* getPeerFromDialogId(unsigned long long id);

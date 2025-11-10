@@ -240,13 +240,13 @@ struct State {
 [[nodiscard]] rpl::producer<Peers> WhoReadIds(
 		not_null<HistoryItem*> item,
 		not_null<QWidget*> context) {
-	auto weak = QPointer<QWidget>(context.get());
+	auto weak = base::make_weak(context);
 	const auto session = &item->history()->session();
 	return [=](auto consumer) {
 		if (!weak) {
 			return rpl::lifetime();
 		}
-		const auto context = PreparedContextAt(weak.data(), session);
+		const auto context = PreparedContextAt(weak.get(), session);
 		auto &entry = context->cacheRead(item);
 		if (entry.requestId) {
 		} else if (const auto user = item->history()->peer->asUser()) {
@@ -325,13 +325,13 @@ struct State {
 		not_null<HistoryItem*> item,
 		const ReactionId &reaction,
 		not_null<QWidget*> context) {
-	auto weak = QPointer<QWidget>(context.get());
+	auto weak = base::make_weak(context);
 	const auto session = &item->history()->session();
 	return [=](auto consumer) {
 		if (!weak) {
 			return rpl::lifetime();
 		}
-		const auto context = PreparedContextAt(weak.data(), session);
+		const auto context = PreparedContextAt(weak.get(), session);
 		auto &entry = context->cacheReacted(item, reaction);
 		if (!entry.requestId) {
 			using Flag = MTPmessages_GetMessageReactionsList::Flag;
@@ -652,6 +652,22 @@ QString FormatReadDate(TimeId date, const QDateTime &now) {
 	const auto parsed = base::unixtime::parse(date);
 	const auto readDate = parsed.date();
 	const auto nowDate = now.date();
+
+	if (readDate.year() < nowDate.year()) {
+		return tr::lng_mediaview_date_time(
+			tr::now,
+			lt_date,
+			tr::lng_month_day_year(
+				tr::now,
+				lt_month,
+				Lang::MonthDay(readDate.month())(tr::now),
+				lt_day,
+				QString::number(readDate.day()),
+				lt_year,
+				QString::number(readDate.year())),
+			lt_time,
+			QLocale().toString(parsed.time(), "HH:mm:ss"));
+	}
 	if (readDate == nowDate) {
 		return tr::lng_mediaview_today(
 			tr::now,

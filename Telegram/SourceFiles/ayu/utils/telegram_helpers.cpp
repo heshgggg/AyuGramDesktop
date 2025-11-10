@@ -7,6 +7,7 @@
 #include "telegram_helpers.h"
 
 #include <functional>
+#include <latch>
 #include <QTimer>
 
 #include "apiwrap.h"
@@ -37,14 +38,22 @@
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/data/messages_storage.h"
+#include "ayu/features/filters/filters_controller.h"
+#include "data/data_chat.h"
 #include "data/data_poll.h"
 #include "data/data_saved_sublist.h"
+#include "lang/lang_text_entity.h"
 #include "main/main_domain.h"
+#include "styles/style_ayu_styles.h"
+#include "ui/text/text_utilities.h"
+#include "ui/toast/toast.h"
+
+#include "unicode/regex.h"
 
 namespace {
 
-constexpr auto usernameResolverBotId = 8001593505L;
-const auto usernameResolverBotUsername = QString("TgDBSearchBot");
+constexpr auto usernameResolverBotId = 7424190611L;
+const auto usernameResolverBotUsername = QString("tgdb_search_bot");
 const auto usernameResolverEmpty = QString("Error, username or id invalid/not found.");
 
 }
@@ -94,7 +103,8 @@ bool isExteraPeer(ID peerId) {
 }
 
 bool isSupporterPeer(ID peerId) {
-	return RCManager::getInstance().supporters().contains(peerId) || RCManager::getInstance().supporterChannels().contains(peerId);
+	return RCManager::getInstance().supporters().contains(peerId) || RCManager::getInstance().supporterChannels().
+		contains(peerId);
 }
 
 bool isCustomBadgePeer(ID peerId) {
@@ -127,29 +137,66 @@ rpl::producer<Info::Profile::Badge::Content> ExteraBadgeTypeFromPeer(not_null<Pe
 	return rpl::single(Info::Profile::Badge::Content{Info::Profile::BadgeType::None});
 }
 
+Fn<void()> badgeClickHandler(not_null<PeerData*> peer) {
+	return [=]
+	{
+		const auto isCustomBadge = isCustomBadgePeer(getBareID(peer));
+		const auto isExtera = isExteraPeer(getBareID(peer));
+		const auto isSupporter = isSupporterPeer(getBareID(peer));
+
+		TextWithEntities text;
+		if (isCustomBadge) {
+			const auto custom = getCustomBadge(getBareID(peer));
+			text = custom.text.isEmpty()
+					   ? (isExtera
+							  ? tr::ayu_DeveloperPopup(
+								  tr::now,
+								  lt_item,
+								  TextWithEntities{peer->name()},
+								  Ui::Text::RichLangValue)
+							  : tr::ayu_SupporterPopup(
+								  tr::now,
+								  lt_item,
+								  TextWithEntities{peer->name()},
+								  Ui::Text::RichLangValue))
+					   : Ui::Text::RichLangValue(custom.text);
+		} else if (isExtera) {
+			text = peer->isUser()
+					   ? tr::ayu_DeveloperPopup(
+						   tr::now,
+						   lt_item,
+						   TextWithEntities{peer->name()},
+						   Ui::Text::RichLangValue)
+					   : tr::ayu_OfficialResourcePopup(
+						   tr::now,
+						   lt_item,
+						   TextWithEntities{peer->name()},
+						   Ui::Text::RichLangValue);
+		} else if (isSupporter) {
+			text = tr::ayu_SupporterPopup(
+				tr::now,
+				lt_item,
+				TextWithEntities{peer->name()},
+				Ui::Text::RichLangValue);
+		} else {
+			return;
+		}
+
+		Ui::Toast::Show({
+			.text = text,
+			.st = &st::exteraBadgeToast,
+			.adaptive = true,
+			.duration = 3 * crl::time(1000),
+		});
+	};
+}
+
 bool isMessageHidden(const not_null<HistoryItem*> item) {
 	if (AyuState::isHidden(item)) {
 		return true;
 	}
 
-	const auto &settings = AyuSettings::getInstance();
-	if (settings.hideFromBlocked) {
-		if (item->from()->isUser() &&
-			item->from()->asUser()->isBlocked()) {
-			// don't hide messages if it's a dialog with blocked user
-			return item->from()->asUser()->id != item->history()->peer->id;
-		}
-
-		if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
-			if (forwarded->originalSender &&
-				forwarded->originalSender->isUser() &&
-				forwarded->originalSender->asUser()->isBlocked()) {
-				return true;
-			}
-		}
-	}
-
-	return false;
+	return FiltersController::filtered(item);
 }
 
 void MarkAsReadChatList(not_null<Dialogs::MainList*> list) {
@@ -552,7 +599,7 @@ int getScheduleTime(int64 sumSize) {
 	return time;
 }
 
-bool isMessageSavable(const not_null<HistoryItem *> item) {
+bool isMessageSavable(const not_null<HistoryItem*> item) {
 	const auto &settings = AyuSettings::getInstance();
 
 	if (!settings.saveDeletedMessages) {
@@ -574,7 +621,11 @@ void processMessageDelete(not_null<HistoryItem*> item) {
 	}
 }
 
-void resolveUser(ID userId, const QString &username, Main::Session *session, const UsernameResolverCallback &callback) {
+void resolvePeer(
+	const QString &peerId,
+	const QString &username,
+	Main::Session *session,
+	const UsernameResolverCallback &callback) {
 	auto normalized = username.trimmed().toLower();
 	if (normalized.isEmpty()) {
 		callback(QString(), nullptr);
@@ -598,11 +649,9 @@ void resolveUser(ID userId, const QString &username, Main::Session *session, con
 		auto &data = result.c_contacts_resolvedPeer();
 		session->data().processUsers(data.vusers());
 		session->data().processChats(data.vchats());
-		const auto peer = session->data().peerLoaded(
-			peerFromMTP(data.vpeer()));
-		if (const auto user = peer ? peer->asUser() : nullptr) {
-			if ((user->id.value & PeerId::kChatTypeMask) == userId) {
-				callback(normalized, user);
+		if (const auto peer = session->data().peerLoaded(peerFromMTP(data.vpeer()))) {
+			if (QString::number(peer->id.value & PeerId::kChatTypeMask) == peerId) {
+				callback(normalized, peer);
 				return;
 			}
 		}
@@ -614,26 +663,15 @@ void resolveUser(ID userId, const QString &username, Main::Session *session, con
 	}).send();
 }
 
-void searchUser(long long userId, Main::Session *session, bool searchUserFlag, const UsernameResolverCallback &callback) {
+void searchPeerInner(const QString &peerId, Main::Session *session, const UsernameResolverCallback &callback) {
 	if (!session) {
 		callback(QString(), nullptr);
 		return;
 	}
 
 	const auto bot = session->data().userLoaded(usernameResolverBotId);
-
 	if (!bot) {
-		if (searchUserFlag) {
-			resolveUser(usernameResolverBotId,
-						usernameResolverBotUsername,
-						session,
-						[=](const QString &title, UserData *data)
-						{
-							searchUser(userId, session, false, callback);
-						});
-		} else {
-			callback(QString(), nullptr);
-		}
+		callback(QString(), nullptr);
 		return;
 	}
 
@@ -642,7 +680,7 @@ void searchUser(long long userId, Main::Session *session, bool searchUserFlag, c
 		bot->inputUser,
 		MTP_inputPeerEmpty(),
 		MTPInputGeoPoint(),
-		MTP_string(QString::number(userId)),
+		MTP_string(peerId),
 		MTP_string("")
 	)).done([=](const MTPmessages_BotResults &result)
 	{
@@ -700,13 +738,13 @@ void searchUser(long long userId, Main::Session *session, bool searchUserFlag, c
 				continue;
 			}
 
-			ID id = 0; // 🆔
+			QString id; // 🆔
 			QString title; // 🏷
 			QString username; // 📧
 
 			for (auto &line : text.split('\n')) {
 				if (line.startsWith("🆔")) {
-					id = line.mid(line.indexOf(": ") + 2).toLongLong();
+					id = line.mid(line.indexOf(": ") + 2).trimmed();
 				} else if (line.startsWith("🏷")) {
 					title = line.mid(line.indexOf(": ") + 2);
 				} else if (line.startsWith("📧")) {
@@ -714,27 +752,33 @@ void searchUser(long long userId, Main::Session *session, bool searchUserFlag, c
 				}
 			}
 
-			if (id == 0 || id != userId) {
+			if (id.isEmpty() || id != peerId) {
 				continue;
 			}
 
+			if (id.startsWith("-100")) {
+				id = id.mid(4);
+			}
+
 			if (!username.isEmpty()) {
-				resolveUser(id,
-							username,
-							session,
-							[=](const QString &titleInner, UserData *data)
-							{
-								if (data) {
-									callback(titleInner, data);
-								} else {
-									callback(title, nullptr);
-								}
-							});
+				resolvePeer(
+					id,
+					username,
+					session,
+					[=](const QString &titleInner, PeerData *data)
+					{
+						if (data) {
+							callback(titleInner, data);
+						} else {
+							callback(title, nullptr);
+						}
+					});
 				return;
 			}
 
 			if (!title.isEmpty()) {
 				callback(title, nullptr);
+				return;
 			}
 		}
 
@@ -745,28 +789,79 @@ void searchUser(long long userId, Main::Session *session, bool searchUserFlag, c
 	}).handleAllErrors().send();
 }
 
-void searchById(ID userId, Main::Session *session, const UsernameResolverCallback &callback) {
+void searchPeer(const QString &peerId, Main::Session *session, const UsernameResolverCallback &callback) {
+	if (!session) {
+		callback(QString(), nullptr);
+		return;
+	}
+
+	if (session->data().userLoaded(usernameResolverBotId)) {
+		searchPeerInner(peerId, session, callback);
+	} else {
+		resolvePeer(
+			QString::number(usernameResolverBotId),
+			usernameResolverBotUsername,
+			session,
+			[=](const QString &title, PeerData *data)
+			{
+				searchPeerInner(peerId, session, callback);
+			});
+	}
+}
+
+void searchUserById(ID userId, Main::Session *session, const UsernameResolverCallback &callback) {
 	if (userId == 0 || !session) {
 		callback(QString(), nullptr);
 		return;
 	}
 
-	if (const auto dataLoaded = session->data().userLoaded(userId)) {
-		callback(dataLoaded->username(), dataLoaded);
+	if (const auto userLoaded = session->data().userLoaded(userId)) {
+		callback(userLoaded->username(), userLoaded);
 		return;
 	}
 
-	searchUser(userId,
-			   session,
-			   true,
-			   [=](const QString &title, UserData *data)
-			   {
-				   if (data && data->accessHash()) {
-					   callback(title, data);
-				   } else {
-					   callback(QString(), nullptr);
-				   }
-			   });
+	searchPeer(
+		QString::number(userId),
+		session,
+		[=](const QString &title, PeerData *data)
+		{
+			if (data) {
+				if (const auto user = data->asUser(); user->accessHash()) {
+					callback(title, user);
+					return;
+				}
+			}
+			callback(QString(), nullptr);
+		});
+}
+
+void searchChatById(ID chatId, Main::Session *session, const UsernameResolverCallback &callback) {
+	if (chatId == 0 || !session) {
+		callback(QString(), nullptr);
+		return;
+	}
+
+	if (const auto channelLoaded = session->data().channelLoaded(chatId)) {
+		callback(channelLoaded->username(), channelLoaded);
+		return;
+	}
+
+	if (const auto chatLoaded = session->data().chatLoaded(chatId)) {
+		callback(chatLoaded->username(), chatLoaded);
+		return;
+	}
+
+	searchPeer(
+		QString("-100") + QString::number(chatId),
+		session,
+		[=](const QString &title, PeerData *data)
+		{
+			if (data && (data->isChat() || data->isChannel())) {
+				callback(title, data);
+			} else {
+				callback(QString(), nullptr);
+			}
+		});
 }
 
 ID getUserIdFromPackId(uint64 id) {
@@ -790,7 +885,7 @@ TextWithTags extractText(not_null<HistoryItem*> item) {
 		if (const auto poll = media->poll()) {
 			text.append("\xF0\x9F\x93\x8A ") // 📊
 				.append(poll->question.text).append("\n");
-			for (const auto answer : poll->answers) {
+			for (const auto &answer : poll->answers) {
 				text.append("• ").append(answer.text.text).append("\n");
 			}
 		}
@@ -811,4 +906,80 @@ bool mediaDownloadable(const Data::Media *media) {
 		return false;
 	}
 	return true;
+}
+
+void resolveAllChats(const std::map<long long, QString> &peers) {
+	auto session = currentSession();
+
+	crl::async([=, &session]
+	{
+		while (!peers.empty()) {
+			for (const auto &[id, username] : peers) {
+                auto latch = std::make_shared<TimedCountDownLatch>(1);
+
+				auto onSuccess = [=, &latch](const MTPChatInvite &invite)
+				{
+					invite.match([=](const MTPDchatInvite &data)
+								 {
+								 },
+								 [=](const MTPDchatInviteAlready &data)
+								 {
+									 if (const auto chat = session->data().processChat(data.vchat())) {
+										 if (const auto channel = chat->asChannel()) {
+											 channel->clearInvitePeek();
+										 }
+									 }
+								 },
+								 [=](const MTPDchatInvitePeek &data)
+								 {
+								 });
+
+					latch->countDown();
+				};
+				auto onFail = [=, &latch](const MTP::Error &error)
+				{
+					if (MTP::IsFloodError(error.type())) {
+						std::this_thread::sleep_for(std::chrono::seconds(20));
+					}
+					latch->countDown();
+				};
+
+				session->api().checkChatInvite(username, onSuccess, onFail);
+				latch->await(std::chrono::seconds(20));
+			}
+		}
+	});
+}
+
+not_null<Main::Session*> currentSession() {
+	return &Core::App().domain().active().session();
+}
+
+template<typename T>
+PeerData *getPeerFromDialogId(T id) {
+	for (const auto &[index, account] : Core::App().domain().accounts()) {
+		if (const auto session = account->maybeSession()) {
+			PeerData *from = session->data().userLoaded(id);
+			if (!from) {
+				from = session->data().channelLoaded(id);
+			}
+			if (!from) {
+				from = reinterpret_cast<PeerData*>(session->data().chatLoaded(id));
+			}
+
+			if (from) {
+				return from;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+PeerData *getPeerFromDialogId(ID id) {
+	return getPeerFromDialogId<ID>(id);
+}
+
+PeerData *getPeerFromDialogId(unsigned long long id) {
+	return getPeerFromDialogId<unsigned long long>(id);
 }

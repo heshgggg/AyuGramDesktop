@@ -156,7 +156,7 @@ Cover::Cover(
 			Window::GifPauseReason::Layer);
 	},
 	0, // customStatusLoopsLimit
-	Info::Profile::BadgeType::Extera | Info::Profile::BadgeType::ExteraSupporter)
+	Info::Profile::BadgeType::Extera | Info::Profile::BadgeType::ExteraSupporter | Info::Profile::BadgeType::ExteraCustom)
 , _userpic(
 	this,
 	controller,
@@ -209,7 +209,13 @@ Cover::Cover(
 			_badge.widget(),
 			_badge.sizeTag());
 	});
-	rpl::combine(
+	const auto isCustomBadge = isCustomBadgePeer(getBareID(_user));
+	const auto isExtera = isExteraPeer(getBareID(_user));
+	const auto isSupporter = isSupporterPeer(getBareID(_user));
+	if (isExtera || isSupporter || isCustomBadge) {
+		_exteraBadge.setPremiumClickCallback(badgeClickHandler(_user));
+	}
+	rpl::merge(
 		_badge.updated(),
 		_exteraBadge.updated()
 	) | rpl::start_with_next([=] {
@@ -294,9 +300,7 @@ void Cover::refreshNameGeometry(int newWidth) {
 		+ (_badge.widget()
 			   ? (_badge.widget()->width() + st::infoVerifiedCheckPosition.x())
 			   : 0);
-	const auto exteraBadgeTop = nameTop;
-	const auto exteraBadgeBottom = nameTop + _name->height();
-	_exteraBadge.move(exteraBadgeLeft, exteraBadgeTop, exteraBadgeBottom);
+	_exteraBadge.move(exteraBadgeLeft, badgeTop, badgeBottom);
 }
 
 void Cover::refreshIdGeometry(int newWidth) {
@@ -507,7 +511,7 @@ void SetupValidatePhoneNumberSuggestion(
 		st::inviteLinkButton);
 	no->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 	no->setClickedCallback([=] {
-		const auto sharedLabel = std::make_shared<QPointer<Ui::FlatLabel>>();
+		const auto sharedLabel = std::make_shared<base::weak_qptr<Ui::FlatLabel>>();
 		const auto height = st::boxLabel.style.font->height;
 		const auto customEmojiFactory = [=](
 			QStringView data,
@@ -810,30 +814,12 @@ void SetupPremium(
 					? Lang::FormatCreditsAmountToShort(c).string
 					: QString();
 			}),
-			st::settingsButton);
+			st::settingsButton,
+			{ &st::menuIconTon });
 		button->addClickHandler([=] {
 			controller->setPremiumRef("settings");
 			showOther(CurrencyId());
 		});
-
-		const auto badge = Ui::CreateChild<Ui::RpWidget>(button.get());
-		const auto image = Ui::Earn::IconCurrencyColored(
-			st::tonFieldIconSize,
-			st::menuIconColor->c);
-
-		badge->resize(Size(st::tonFieldIconSize));
-		badge->paintRequest(
-		) | rpl::start_with_next([=] {
-			auto p = QPainter(badge);
-			p.drawImage(0, 0, image);
-		}, badge->lifetime());
-
-		button->sizeValue() | rpl::start_with_next([=](const QSize &s) {
-			badge->moveToLeft(
-				button->st().iconLeft
-					+ (st::menuIconShop.width() - badge->width()) / 2,
-				(s.height() - badge->height()) / 2);
-		}, badge->lifetime());
 	}
 	const auto button = AddButtonWithIcon(
 		container,

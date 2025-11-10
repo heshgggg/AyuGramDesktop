@@ -64,7 +64,7 @@ void SetupTranslator(not_null<Ui::VerticalLayout*> container,
 
 	const auto button = AddButtonWithLabel(
 		container,
-		tr::ayu_TranslationProvider(),
+		asBeta(tr::ayu_TranslationProvider()),
 		currentVal,
 		st::settingsButtonNoIcon);
 	button->addClickHandler(
@@ -181,6 +181,24 @@ void SetupQoLToggles(not_null<Ui::VerticalLayout*> container, not_null<Window::S
 	};
 
 	AddCollapsibleToggle(container, tr::ayu_DisableSimilarChannels(), checkboxes, true);
+
+
+	AddButtonWithIcon(
+		container,
+		tr::ayu_DisableNotificationsDelay(),
+		st::settingsButtonNoIcon
+	)->toggleOn(
+		rpl::single(settings->disableNotificationsDelay)
+	)->toggledValue(
+	) | rpl::filter([=](bool enabled)
+	{
+		return (enabled != settings->disableNotificationsDelay);
+	}) | start_with_next([=](bool enabled)
+						 {
+							 AyuSettings::set_disableNotificationsDelay(enabled);
+							 AyuSettings::save();
+						 },
+						 container->lifetime());
 
 	AddSkip(container);
 	AddDivider(container);
