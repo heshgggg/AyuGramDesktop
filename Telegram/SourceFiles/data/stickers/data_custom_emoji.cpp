@@ -879,15 +879,15 @@ void CustomEmojiManager::repaintLater(
 		not_null<Ui::CustomEmoji::Instance*> instance,
 		Ui::CustomEmoji::RepaintRequest request) {
 	auto &bunch = _repaints[request.duration];
-	if (bunch.when < request.when) {
-		if (bunch.when > 0) {
-			for (const auto &already : bunch.instances) {
-				if (already.get() == instance) {
-					// Still waiting for full bunch repaint, don't bump.
-					return;
-				}
+	if (bunch.when > 0) {
+		for (const auto &already : bunch.instances) {
+			if (already.get() == instance) {
+				// Still waiting for full bunch repaint, don't bump.
+				return;
 			}
 		}
+	}
+	if (bunch.when < request.when) {
 		bunch.when = request.when;
 #if 0 // inject-to-on_main
 		_repaintsLastAdded = request.when;
@@ -1040,6 +1040,10 @@ TextWithEntities SingleCustomEmoji(not_null<DocumentData*> document) {
 bool AllowEmojiWithoutPremium(
 		not_null<PeerData*> peer,
 		DocumentData *exactEmoji) {
+	if (true) { // AyuGram: allow all premium emojis (via tg://emoji?id=...)
+		return true;
+	}
+
 	if (peer->isSelf()) {
 		return true;
 	} else if (!exactEmoji) {
