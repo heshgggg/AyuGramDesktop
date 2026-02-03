@@ -468,7 +468,7 @@ void BottomInfo::layoutDateText() {
 		const auto author = _data.author;
 		const auto prefix = !author.isEmpty() ? u", "_q : QString();
 		const auto date = edited + ((_data.flags & Data::Flag::ForwardedDate)
-			? Ui::FormatDateTimeSavedFrom(_data.date, true)
+			? Ui::FormatDateTimeSavedFrom(_data.date)
 			: formatMessageTime(_data.date.time()));
 		const auto afterAuthor = prefix + date;
 		const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
@@ -521,7 +521,7 @@ void BottomInfo::layoutDateText() {
 		const auto prefix = !author.isEmpty() ? (_data.flags & Data::Flag::Edited ? u" "_q : u", "_q) : QString();
 
 		const auto dateStr = (_data.flags & Data::Flag::ForwardedDate)
-			? Ui::FormatDateTimeSavedFrom(_data.date, true)
+			? Ui::FormatDateTimeSavedFrom(_data.date)
 			: formatMessageTime(_data.date.time());
 
 		const auto date = TextWithEntities{}
@@ -741,16 +741,21 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	if (item->isScheduled()) {
 		result.scheduleRepeatPeriod = item->scheduleRepeatPeriod();
 	}
-	if (forwarded
-		&& forwarded->originalDate
+	if (item->isDeleted()) {
+		result.flags |= Flag::AyuDeleted;
+	}
+	if (!forwarded) {
+		return result;
+	}
+	if (forwarded->savedFromMsgId && forwarded->savedFromDate) {
+		result.date = base::unixtime::parse(forwarded->savedFromDate);
+		result.flags |= Flag::ForwardedDate;
+	} else if (forwarded->originalDate
 		&& (message->context() == Context::SavedSublist
 			|| item->history()->peer->isSelf())
 		&& !item->externalReply()) {
 		result.date = base::unixtime::parse(forwarded->originalDate);
 		result.flags |= Flag::ForwardedDate;
-	}
-	if (item->isDeleted()) {
-		result.flags |= Flag::AyuDeleted;
 	}
 	// We don't want to pass and update it in Data for now.
 	//if (item->unread()) {

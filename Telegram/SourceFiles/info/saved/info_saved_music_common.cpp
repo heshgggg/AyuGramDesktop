@@ -61,7 +61,7 @@ void SetupSavedMusic(
 			1
 		) | rpl::map([=](const Data::SavedMusicSlice &data) {
 			return data.size() ? data[0].get() : nullptr;
-		}) | rpl::type_erased()
+		}) | rpl::type_erased
 		: rpl::single<HistoryItem*>((HistoryItem*)(nullptr));
 
 	const auto divider = container->add(
@@ -72,7 +72,7 @@ void SetupSavedMusic(
 	rpl::combine(
 		std::move(musicValue),
 		std::move(topBarColor)
-	) | rpl::start_with_next([=](
+	) | rpl::on_next([=](
 			HistoryItem *item,
 			std::optional<QColor> color) {
 		while (divider->entity()->count()) {
@@ -100,7 +100,7 @@ void SetupSavedMusic(
 				musicButton->entity()->clicks() | rpl::filter([=](Qt::MouseButton mouseButton)
 				{
 					return mouseButton == Qt::RightButton;
-				}) | rpl::start_with_next([=]
+				}) | rpl::on_next([=]
 										  {
 											  const auto &settings = AyuSettings::getInstance();
 
@@ -136,7 +136,7 @@ void SetupSavedMusic(
 										  musicButton->lifetime());
 
 				const auto weak = base::make_weak(musicButton);
-				musicButton->entity()->onReady() | rpl::start_with_next(
+				musicButton->entity()->onReady() | rpl::on_next(
 					[=]
 					{
 						// fix animation glitch
